@@ -1,0 +1,43 @@
+name: Build MongoDB
+on:
+  push:
+    branch: mistress
+  workflow_dispatch:
+  schedule:
+    - cron: "0 16 * * *"
+jobs:
+  build:
+    strategy:
+      matrix:
+        channel: ["nixos-23.11"]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout ${{ matrix.channel }}
+        uses: actions/checkout@v4
+        with:
+          repository: NixOS/nixpkgs
+          ref: ${{ matrix.channel }}
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v26
+        with:
+          nix_path: nixpkgs=channel:${{ matrix.channel }}
+
+      - name: Install Cachix
+        run: nix-env -iA cachix -f '<nixpkgs>'
+
+      - name: Build MongoDB
+        run: nix-build '<nixpkgs>' -A mongodb
+        env:
+          NIXPKGS_ALLOW_UNFREE: "1"
+
+      - name: Push to Cachix
+        run: cachix push uwumarie ./result
+        env:
+          CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: Create Cachix Pin
+        run: cachix pin uwumarie mongodb ./result
+        env:
+          CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
